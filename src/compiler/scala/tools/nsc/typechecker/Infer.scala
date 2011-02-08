@@ -871,7 +871,12 @@ trait Infer {
         if (isVarArgsList(params) && isVarArgsList(ftpe2.params))
           argtpes = argtpes map (argtpe => 
             if (isRepeatedParamType(argtpe)) argtpe.typeArgs.head else argtpe)
-        isApplicable(List(), ftpe2, argtpes, WildcardType)
+        val rc = if( context.isAsSpecificDropsByName ) {
+          isApplicable(List(), ftpe2, formalTypes(argtpes, argtpes.length), WildcardType)
+        } else {
+          isApplicable(List(), ftpe2, argtpes, WildcardType)
+        }
+        rc
       case PolyType(tparams, NullaryMethodType(res)) =>
         isAsSpecific(PolyType(tparams, res), ftpe2)
       case PolyType(tparams, mt: MethodType) if mt.isImplicit =>
@@ -1634,7 +1639,7 @@ trait Infer {
      *
      *  @param infer ...
      */
-    def tryTwice(infer: => Unit) {
+    def tryTwice(infer: => Unit) = tryTwiceRelaxingByName {
       if (context.implicitsEnabled) {
         val reportGeneralErrors = context.reportGeneralErrors
         context.reportGeneralErrors = false
@@ -1651,6 +1656,26 @@ trait Infer {
       }
       else infer
     }
+
+    def tryTwiceRelaxingByName(infer: => Unit) {
+      val originalErrors = context.reportAmbiguousErrors
+      val original = context.isAsSpecificDropsByName
+      context.reportAmbiguousErrors = false
+      try {
+        context.isAsSpecificDropsByName = false
+        infer
+      } catch {
+        case ex: CyclicReference  => throw ex
+        case ex: TypeError        =>
+          context.reportAmbiguousErrors = originalErrors
+          context.isAsSpecificDropsByName = true
+          infer
+      } finally {
+        context.isAsSpecificDropsByName = original
+        context.reportAmbiguousErrors = originalErrors
+      }
+    }
+
 
     /** Assign <code>tree</code> the type of unique polymorphic alternative
      *  with <code>nparams</code> as the number of type parameters, if it exists.

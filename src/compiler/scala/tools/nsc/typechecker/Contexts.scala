@@ -121,6 +121,7 @@ trait Contexts { self: Analyzer =>
     var reportGeneralErrors = false
     var diagnostic: List[String] = Nil      // these messages are printed when issuing an error
     var implicitsEnabled = false
+    var isAsSpecificDropsByName = false
     var checking = false
     var retyping = false
 
